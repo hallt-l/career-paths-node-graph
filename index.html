@@ -1,0 +1,1232 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>3D Career Skills Network - v5 (Axes)</title>
+  <style>
+    body { margin: 0; font-family: sans-serif; background: #000; overflow: hidden; }
+    #graph { width: 100vw; height: 100vh; }
+    #controls {
+      position: fixed; top: 10px; left: 10px;
+      background: rgba(0,0,0,0.95); color: #fff;
+      padding: 15px; border-radius: 8px; font-size: 12px;
+      max-width: 320px; max-height: calc(100vh - 40px);
+      overflow-y: auto; z-index: 100;
+    }
+    #legend {
+      position: fixed; top: 10px; right: 10px;
+      background: rgba(0,0,0,0.9); color: #fff;
+      padding: 12px; border-radius: 8px; font-size: 11px;
+      z-index: 100; min-width: 150px;
+    }
+    #legend h4 { margin: 0 0 8px; font-size: 12px; }
+    .legend-item { display: flex; align-items: center; gap: 8px; margin: 4px 0; }
+    .legend-color { width: 14px; height: 14px; border-radius: 3px; }
+    #controls h3 { margin: 8px 0; font-size: 14px; }
+    #controls h4 { margin: 10px 0 5px; font-size: 11px; color: #aaa; border-bottom: 1px solid #333; padding-bottom: 3px; }
+    select, input[type="range"], input[type="text"], input[type="number"] { margin: 3px 0; width: 100%; font-size: 11px; }
+    button { width: 100%; padding: 6px; margin-top: 5px; background: #333; color: white; border: 1px solid #555; border-radius: 4px; cursor: pointer; font-size: 11px; }
+    button:hover { background: #444; }
+    label { display: block; margin-top: 8px; font-weight: bold; font-size: 10px; }
+    .value-display { min-width: 30px; text-align: right; color: #4a9eff; float: right; }
+    .formula-slot { background: rgba(255,255,255,0.05); padding: 8px; border-radius: 4px; margin: 8px 0; }
+    .formula-slot label { margin-top: 4px; }
+    
+    .force-section { background: rgba(255,255,255,0.02); border: 1px solid #333; border-radius: 4px; margin: 8px 0; overflow: hidden; }
+    .force-header { display: flex; align-items: center; gap: 8px; padding: 8px; background: rgba(255,255,255,0.05); cursor: pointer; user-select: none; }
+    .force-header input[type="checkbox"] { flex-shrink: 0; }
+    .force-header-title { flex: 1; font-weight: bold; font-size: 11px; }
+    .force-header.enabled .force-header-title { color: #2ecc71; }
+    .force-header.enabled input[type="checkbox"] { accent-color: #2ecc71; }
+    .force-content { display: none; padding: 8px; background: rgba(255,255,255,0.02); }
+    .force-content.show { display: block; }
+    .force-header::after { content: '▼'; font-size: 9px; opacity: 0.5; transition: transform 0.2s; }
+    .force-header.collapsed::after { transform: rotate(-90deg); }
+  </style>
+  <script src="https://unpkg.com/3d-force-graph@1.73.3/dist/3d-force-graph.min.js"></script>
+</head>
+<body>
+  <div id="graph"></div>
+  <div id="legend" style="display: none;"><h4>🎨 Legend</h4></div>
+  <div id="controls" style="display: none;">
+    <h3>🎛️ Network Viz v5 (Axes + Properties)</h3>
+    
+    <h4>⚡ Attribute-Driven Forces</h4>
+    
+    <!-- Spring Force -->
+    <div class="force-section">
+      <div class="force-header collapsed enabled" onclick="toggleForceSection(this)">
+        <input type="checkbox" id="springEnabled" checked onchange="event.stopPropagation(); updateForces(); this.parentElement.classList.toggle('enabled');">
+        <span class="force-header-title">🔗 Spring Force</span>
+      </div>
+      <div class="force-content">
+        <label><input type="checkbox" id="springReverse"> Reverse</label>
+        <label>Formula:</label>
+        <select id="springFormulaMode">
+          <option value="const" selected>Constant (fixed)</option>
+          <option value="R*D">Centrality (R×D)</option>
+          <option value="R/(1+D)">Foundation (R/(1+D))</option>
+          <option value="avg_score">(req_score + master_score)/2</option>
+          <option value="interest">Interest</option>
+          <option value="market">Market Relevance</option>
+          <option value="familiarity">Familiarity</option>
+          <option value="req_indirect">Indirect Requirements</option>
+          <option value="dep_indirect">Indirect Dependencies</option>
+          <option value="custom">Custom...</option>
+        </select>
+        <input type="text" id="springFormulaCustom" placeholder="e.g., R*fam/5" style="display:none;">
+        <label>Strength Base: <span class="value-display" id="springStrValue">0.1</span></label>
+        <input type="range" id="springStrengthBase" min="0.01" max="3" step="0.01" value="0.1">
+      </div>
+    </div>
+    
+    <!-- Repulsion Force -->
+    <div class="force-section">
+      <div class="force-header collapsed enabled" onclick="toggleForceSection(this)">
+        <input type="checkbox" id="repulsionEnabled" checked onchange="event.stopPropagation(); updateForces(); this.parentElement.classList.toggle('enabled');">
+        <span class="force-header-title">💥 Repulsion Force</span>
+      </div>
+      <div class="force-content">
+        <label><input type="checkbox" id="repulsionReverse"> Reverse</label>
+        <label>Mode:</label>
+        <select id="repulsionMode">
+          <option value="pairwise" selected>Pairwise (charge force)</option>
+          <option value="global">Global (toward edges)</option>
+        </select>
+        <label>Formula:</label>
+        <select id="repulsionFormulaMode">
+          <option value="const" selected>Constant (fixed)</option>
+          <option value="R*D">Centrality (R×D)</option>
+          <option value="req_direct">Direct Requirements (R)</option>
+          <option value="dep_direct">Direct Dependencies (D)</option>
+          <option value="req_indirect">Indirect Requirements</option>
+          <option value="dep_indirect">Indirect Dependencies</option>
+          <option value="centrality_sqrt">√(R×D)</option>
+          <option value="familiarity">Familiarity</option>
+          <option value="interest">Interest</option>
+          <option value="custom">Custom...</option>
+        </select>
+        <input type="text" id="repulsionFormulaCustom" placeholder="e.g., R*2+D/2" style="display:none;">
+        <label>Strength: <span class="value-display" id="repulsionValue">50</span></label>
+        <input type="range" id="repulsionBase" min="0" max="1000" step="1" value="50">
+      </div>
+    </div>
+    
+    <!-- Attraction Force -->
+    <div class="force-section">
+      <div class="force-header collapsed" onclick="toggleForceSection(this)">
+        <input type="checkbox" id="attractionEnabled" onchange="event.stopPropagation(); updateForces(); this.parentElement.classList.toggle('enabled');">
+        <span class="force-header-title">🧲 Attraction Force</span>
+      </div>
+      <div class="force-content">
+        <label><input type="checkbox" id="attractionReverse"> Reverse</label>
+        <label>Mode:</label>
+        <select id="attractionMode">
+          <option value="pairwise" selected>Pairwise (similar values attract)</option>
+          <option value="global">Global (pull to center)</option>
+        </select>
+        <label>Formula:</label>
+        <select id="attractionFormulaMode">
+          <option value="const">Constant (fixed)</option>
+          <option value="R*D">Centrality (R×D)</option>
+          <option value="req_direct">Direct Requirements (R)</option>
+          <option value="dep_direct">Direct Dependencies (D)</option>
+          <option value="req_indirect">Indirect Requirements</option>
+          <option value="dep_indirect">Indirect Dependencies</option>
+          <option value="centrality_sqrt">√(R×D)</option>
+          <option value="familiarity">Familiarity</option>
+          <option value="interest">Interest</option>
+          <option value="market">Market Relevance</option>
+          <option value="custom">Custom...</option>
+        </select>
+        <input type="text" id="attractionFormulaCustom" placeholder="e.g., R/2+D/2" style="display:none;">
+        <label>Strength: <span class="value-display" id="attractionValue">0</span></label>
+        <input type="range" id="attractionBase" min="0" max="100" step="0.5" value="0">
+      </div>
+    </div>
+    
+    <!-- Link Distance -->
+    <div class="force-section">
+      <div class="force-header collapsed enabled" onclick="toggleForceSection(this)">
+        <input type="checkbox" id="linkEnabled" checked onchange="event.stopPropagation(); updateForces(); this.parentElement.classList.toggle('enabled');">
+        <span class="force-header-title">🔗 Link Distance</span>
+      </div>
+      <div class="force-content">
+        <label>Formula:</label>
+        <select id="linkDistFormulaMode">
+          <option value="const" selected>Constant (slider)</option>
+          <option value="R+D">Total Connections (R+D)</option>
+          <option value="req_direct">Direct Requirements</option>
+          <option value="dep_direct">Direct Dependencies</option>
+          <option value="req_indirect">Indirect Requirements</option>
+          <option value="dep_indirect">Indirect Dependencies</option>
+          <option value="efficiency">Foundation Efficiency</option>
+          <option value="familiarity">Familiarity</option>
+          <option value="fam_inverse">Inverse Familiarity</option>
+          <option value="custom">Custom...</option>
+        </select>
+        <input type="text" id="linkDistFormulaCustom" placeholder="e.g., 50-R*5" style="display:none;">
+        <label>Base Distance: <span class="value-display" id="linkDistValue">30</span></label>
+        <input type="range" id="linkDistBase" min="5" max="200" value="30">
+      </div>
+    </div>
+    
+    <!-- Axis Alignment -->
+    <div class="force-section">
+      <div class="force-header collapsed enabled" onclick="toggleForceSection(this)">
+        <input type="checkbox" id="enableAxisAlignment" checked onchange="event.stopPropagation(); updateForces(); this.parentElement.classList.toggle('enabled');">
+        <span class="force-header-title">🧭 Axis Alignment</span>
+      </div>
+      <div class="force-content">
+        <label>X-Axis Property:</label>
+        <select id="xAxisProperty" onchange="updateForces()">
+          <option value="familiarity">Familiarity</option>
+          <option value="interest">Interest</option>
+          <option value="market">Market Relevance</option>
+          <option value="req_indirect">Indirect Requirements</option>
+          <option value="dep_indirect">Indirect Dependencies</option>
+          <option value="req_direct">Direct Requirements</option>
+          <option value="dep_direct">Direct Dependencies</option>
+        </select>
+        
+        <label>Y-Axis Property:</label>
+        <select id="yAxisProperty" onchange="updateForces()">
+          <option value="interest" selected>Interest</option>
+          <option value="familiarity">Familiarity</option>
+          <option value="market">Market Relevance</option>
+          <option value="req_indirect">Indirect Requirements</option>
+          <option value="dep_indirect">Indirect Dependencies</option>
+          <option value="req_direct">Direct Requirements</option>
+          <option value="dep_direct">Direct Dependencies</option>
+        </select>
+        
+        <label>Z-Axis Property:</label>
+        <select id="zAxisProperty" onchange="updateForces()">
+          <option value="market" selected>Market Relevance</option>
+          <option value="familiarity">Familiarity</option>
+          <option value="interest">Interest</option>
+          <option value="req_indirect">Indirect Requirements</option>
+          <option value="dep_indirect">Indirect Dependencies</option>
+          <option value="req_direct">Direct Requirements</option>
+          <option value="dep_direct">Direct Dependencies</option>
+        </select>
+        
+        <label>Axis Pull Strength: <span class="value-display" id="axisPullValue">3</span></label>
+        <input type="range" id="axisPullStrength" min="0" max="10" step="0.1" value="3" onchange="updateForces()">
+        
+        <label>Axis Scale: <span class="value-display" id="axisScaleValue">100</span></label>
+        <input type="range" id="axisScale" min="10" max="300" step="10" value="100" onchange="updateForces()">
+      </div>
+    </div>
+    
+    <!-- Visualization -->
+    <div class="force-section">
+      <div class="force-header collapsed" onclick="toggleForceSection(this)">
+        <input type="checkbox" id="vizEnabled" checked onchange="event.stopPropagation(); this.parentElement.classList.toggle('enabled');" style="visibility:hidden;">
+        <span class="force-header-title">🎨 Visualization</span>
+      </div>
+      <div class="force-content">
+        <label>Node Base Size: <span class="value-display" id="nodeSizeValue">6</span></label>
+        <input type="range" id="nodeBaseSize" min="2" max="20" step="1" value="6">
+
+        <label>Edge Base Thickness: <span class="value-display" id="edgeThicknessValue">5</span></label>
+        <input type="range" id="edgeBaseThickness" min="0.5" max="15" step="0.5" value="5">
+        
+        <label>Node Color:</label>
+        <select id="colorMetric" onchange="updateColors()">
+          <option value="familiarity">Familiarity</option>
+          <option value="interest">Interest</option>
+          <option value="market">Market Relevance</option>
+          <option value="req_direct">Requirements (R)</option>
+          <option value="dep_direct">Dependencies (D)</option>
+          <option value="centrality">Centrality (R×D)</option>
+        </select>
+        
+        <label>Node Size Metric:</label>
+        <select id="sizeMetric" onchange="updateForces()">
+          <option value="const">Constant</option>
+          <option value="R*D">Centrality (R×D)</option>
+          <option value="req_direct">Requirements</option>
+          <option value="req_score">Requirement Score</option>
+        </select>
+        
+        <label>Edge Color:</label>
+        <select id="edgeColorMode" onchange="updateEdges()">
+          <option value="type">By Type (Dep/Req)</option>
+          <option value="strength">By Strength</option>
+          <option value="uniform">Uniform</option>
+        </select>
+      </div>
+    </div>
+    
+    <!-- Simulation Control -->
+    <div class="force-section">
+      <div class="force-header collapsed" onclick="toggleForceSection(this)">
+        <input type="checkbox" id="simEnabled" checked onchange="event.stopPropagation(); this.parentElement.classList.toggle('enabled');" style="visibility:hidden;">
+        <span class="force-header-title">⚙️ Simulation Control</span>
+      </div>
+      <div class="force-content">
+        <label><input type="checkbox" id="autoRestart" checked> Auto-restart simulation on change</label>
+        <button onclick="resetSimulation()">🔄 Reset & Play (15s)</button>
+        <button onclick="togglePlayPause()">⏸️ Pause/Resume</button>
+        <button onclick="resetView()">📷 Reset Camera</button>
+        
+        <label>Simulation Heat: <span class="value-display" id="heatValue">0.1</span></label>
+        <input type="range" id="simulationHeat" min="0.001" max="10" step="0.1" value="1">
+        
+        <label>Warmup Ticks: <span class="value-display" id="warmupValue">0</span></label>
+        <input type="range" id="warmupTicks" min="0" max="500" step="10" value="0" onchange="updateWarmupCooldown()">
+
+        <label>Cooldown Ticks: <span class="value-display" id="cooldownValue">1000</span></label>
+        <input type="range" id="cooldownTicks" min="0" max="10000" step="10" value="1000" onchange="updateWarmupCooldown()">
+      </div>
+    </div>
+    
+    <div style="margin-top: 12px; padding-top: 8px; border-top: 1px solid #333; font-size: 9px; color: #666;">
+      <div id="nodeCount"></div>
+    </div>
+  </div>
+  
+  <script>
+    let Graph;
+    let graphData;
+    let continuousAnimationInterval;
+    let isSimulationPlaying = true;  // Start playing by default
+    let axesScene;  // Reference to axes objects
+    const formulaSlots = {};
+    
+    function toggleForceSection(header) {
+      header.classList.toggle('collapsed');
+      header.nextElementSibling.classList.toggle('show');
+    }
+    
+    fetch('network_3d.json')
+      .then(res => res.json())
+      .then(data => {
+        data.links = data.edges || [];
+        delete data.edges;
+        
+        // Create emoji-to-number maps
+        const famMap = {'🏆 Profissional': 5, '🏆': 5, '💪 Confiante': 4, '💪': 4, '📚 Familiar': 3, '📚': 3, '🌱 Iniciante': 2, '🌱': 2, '❓ Desconhecida': 1, '❓': 1};
+        const intMap = {'⭐': 5, '❤️ Alto': 5, '❤️': 5, '🔥 Muito alto': 4, '🔥': 4, '👍': 3, '💛 Médio': 2, '💛': 2, '😐': 2, '💙 Baixo': 1, '💙': 1, '🤷 Não sei': 1, '🤷': 1};
+        const mktMap = {'⭐⭐⭐⭐⭐': 5, '⭐⭐⭐⭐ Alta': 5, '⭐⭐⭐⭐': 4, '⭐⭐⭐': 3, '⭐⭐': 2, '⭐': 1, '🤷 Não sei': 1, '🤷': 1};
+        
+        data.nodes.forEach(node => {
+          node.id = node.name;
+          node.req_direct = 0;
+          node.dep_direct = 0;
+          
+          // Parse emoji strings to numbers
+          node.familiarity_num = famMap[node.familiarity] || famMap[String(node.familiarity).split(' ')[0]] || 0;
+          node.interest_num = intMap[node.interest] || intMap[String(node.interest).split(' ')[0]] || 0;
+          node.market_num = mktMap[node.market] || mktMap[String(node.market).match(/[⭐]+/)?.[0]] || (node.market_num) || 0;
+        });
+        
+        data.links.forEach((link, idx) => {
+          link.id = idx;
+          const source = data.nodes.find(n => n.name === link.source);
+          const target = data.nodes.find(n => n.name === link.target);
+          if (source) source.dep_direct++;
+          if (target) target.req_direct++;
+          
+          // Mark edge type: if A → B exists (A required by B), it's a "requirement" edge
+          // Otherwise it's derived from dependencies (B depends on A)
+          link.type = link.source && link.target ? 'edge' : 'unknown';
+        });
+        
+        data.nodes.forEach(node => {
+          node.network_centrality = node.req_direct * node.dep_direct;
+          node.foundation_efficiency = node.req_direct / (1 + node.dep_direct);
+        });
+        
+        graphData = data;
+        console.log('✓ Data loaded - nodes:', data.nodes.length, 'links:', data.links.length);
+        
+        console.log('📊 Creating ForceGraph3D...');
+        Graph = ForceGraph3D()(document.getElementById('graph'))
+          .graphData(data)
+          .nodeId('id')
+          .nodeLabel('name')
+          .nodeRelSize(6)
+          .nodeOpacity(0.9)
+          .linkWidth(1.5)
+          .linkOpacity(0.5)
+          .linkDirectionalArrowLength(3)
+          .linkDirectionalArrowRelPos(0)
+          .linkColor(() => 'rgba(100, 150, 255, 0.4)')
+          .backgroundColor('#171717')
+          .warmupTicks(0)
+          .cooldownTicks(1000);
+        
+        // Add axes after graph is ready
+        setTimeout(() => {
+          addAxes();
+        }, 100);
+        
+        // Setup panel immediately after chain
+        console.log('✓ Graph created, setting up panel...');
+        document.getElementById('controls').style.display = 'block';
+        document.getElementById('nodeCount').innerHTML = `<strong>Nodes:</strong> ${data.nodes.length}<br><strong>Links:</strong> ${data.links.length}`;
+        
+        // Setup formula mode listeners
+        ['springFormulaMode', 'repulsionFormulaMode', 'linkDistFormulaMode', 'attractionFormulaMode'].forEach(id => {
+          document.getElementById(id).addEventListener('change', function() {
+            const customId = id.replace('Mode', 'Custom');
+            const custom = document.getElementById(customId);
+            custom.style.display = this.value === 'custom' ? 'block' : 'none';
+            if (document.getElementById('autoRestart').checked) updateForces();
+          });
+        });
+        
+        // Mode selectors for repulsion and attraction
+        ['repulsionMode', 'attractionMode'].forEach(id => {
+          document.getElementById(id).addEventListener('change', updateForces);
+        });
+        
+        // Enable checkboxes for forces
+        ['springEnabled', 'repulsionEnabled', 'linkEnabled', 'attractionEnabled'].forEach(id => {
+          const checkbox = document.getElementById(id);
+          if (checkbox) {
+            checkbox.parentElement.classList.toggle('enabled', checkbox.checked);
+          }
+        });
+        
+        // Axis property listeners
+        ['xAxisProperty', 'yAxisProperty', 'zAxisProperty', 'enableAxisAlignment'].forEach(id => {
+          document.getElementById(id).addEventListener('change', updateForces);
+        });
+        
+        document.getElementById('colorMetric').addEventListener('change', updateColors);
+        document.getElementById('sizeMetric').addEventListener('change', updateForces);
+        document.getElementById('edgeColorMode').addEventListener('change', updateEdges);
+        document.getElementById('nodeBaseSize').addEventListener('input', function() {
+          document.getElementById('nodeSizeValue').textContent = this.value;
+          if (document.getElementById('autoRestart').checked) updateForces();
+        });
+        document.getElementById('edgeBaseThickness').addEventListener('input', function() {
+          document.getElementById('edgeThicknessValue').textContent = this.value;
+          if (document.getElementById('autoRestart').checked) updateEdges();
+        });
+        document.getElementById('springStrengthBase').addEventListener('input', function() {
+          document.getElementById('springStrValue').textContent = this.value;
+          if (document.getElementById('autoRestart').checked) updateForces();
+        });
+        document.getElementById('repulsionBase').addEventListener('input', function() {
+          document.getElementById('repulsionValue').textContent = this.value;
+          if (document.getElementById('autoRestart').checked) updateForces();
+        });
+        document.getElementById('attractionBase').addEventListener('input', function() {
+          document.getElementById('attractionValue').textContent = this.value;
+          if (document.getElementById('autoRestart').checked) updateForces();
+        });
+        document.getElementById('linkDistBase').addEventListener('input', function() {
+          document.getElementById('linkDistValue').textContent = this.value;
+          if (document.getElementById('autoRestart').checked) updateForces();
+        });
+        
+        document.getElementById('axisPullStrength').addEventListener('input', function() {
+          document.getElementById('axisPullValue').textContent = this.value;
+          if (document.getElementById('autoRestart').checked) updateForces();
+        });
+        
+        document.getElementById('axisScale').addEventListener('input', function() {
+          document.getElementById('axisScaleValue').textContent = this.value;
+          if (document.getElementById('autoRestart').checked) updateForces();
+        });
+        
+        document.getElementById('simulationHeat').addEventListener('input', function() {
+          document.getElementById('heatValue').textContent = this.value;
+        });
+        
+        console.log('✓ All event listeners attached');
+        
+        updateForces();
+        console.log('✓ updateForces() called');
+        console.log('📊 Continuous animation should now be running...');
+        updateEdges();
+        console.log('✓ updateEdges() called');
+        updateColors();
+        console.log('✓ updateColors() called - current metric:', document.getElementById('colorMetric').value);
+        
+        // Log sample node data to verify interest_num and market_num
+        if (data.nodes.length > 0) {
+          console.log('Sample node (first):', {
+            name: data.nodes[0].name,
+            familiarity_num: data.nodes[0].familiarity_num,
+            interest_num: data.nodes[0].interest_num,
+            market_num: data.nodes[0].market_num
+          });
+        }
+        
+        console.log('✅ Panel setup complete!');
+        
+        // Verify continuous animation is running
+        setTimeout(() => {
+          if (continuousAnimationInterval) {
+            console.log('✅ Continuous animation loop is active');
+          } else {
+            console.warn('⚠️ Continuous animation loop did NOT start!');
+          }
+        }, 100);
+      });
+    
+    function getPropertyValue(node, property) {
+      switch(property) {
+        case 'familiarity': return (node.familiarity_num || 0) / 5;
+        case 'interest': return (node.interest_num || 0) / 5;
+        case 'market': return (node.market_num || 0) / 5;
+        case 'req_indirect': return Math.min((node.req_indirect || 0) / 10, 1);
+        case 'dep_indirect': return Math.min((node.dep_indirect || 0) / 10, 1);
+        case 'req_direct': return Math.min((node.req_direct || 0) / 10, 1);
+        case 'dep_direct': return Math.min((node.dep_direct || 0) / 10, 1);
+        default: return 0;
+      }
+    }
+    
+    function getAxisTargetPosition(node) {
+      // Returns the target position based on axis alignment
+      const xProp = document.getElementById('xAxisProperty').value;
+      const yProp = document.getElementById('yAxisProperty').value;
+      const zProp = document.getElementById('zAxisProperty').value;
+      const scale = parseFloat(document.getElementById('axisScale').value);
+      
+      const x = (getPropertyValue(node, xProp) - 0.5) * 2 * scale;
+      const y = (getPropertyValue(node, yProp) - 0.5) * 2 * scale;
+      const z = (getPropertyValue(node, zProp) - 0.5) * 2 * scale;
+      
+      return { x, y, z };
+    }
+    
+    function applyAxisAlignmentForces() {
+      // Apply attractor forces pulling nodes toward their axis-aligned positions
+      if (!Graph || !graphData || !document.getElementById('enableAxisAlignment').checked) return;
+      
+      const pullStrength = parseFloat(document.getElementById('axisPullStrength').value);
+      if (pullStrength === 0) return;
+      
+      const simulation = Graph.d3Force('_simulation');
+      if (!simulation) return;
+      
+      // Create a custom force for axis alignment
+      const axisPull = () => {
+        graphData.nodes.forEach(node => {
+          if (!node.vx) node.vx = 0;
+          if (!node.vy) node.vy = 0;
+          if (!node.vz) node.vz = 0;
+          
+          const target = getAxisTargetPosition(node);
+          const dx = target.x - node.x;
+          const dy = target.y - node.y;
+          const dz = target.z - node.z;
+          
+          // Apply attraction to target position
+          const strength = pullStrength * 0.01;
+          node.vx += dx * strength;
+          node.vy += dy * strength;
+          node.vz += dz * strength;
+        });
+      };
+      
+      // Replace or add axis pull force
+      simulation.force('axisPull', axisPull);
+    }
+    
+    function addAxes() {
+      try {
+        const scene = Graph.scene();
+        if (!scene) {
+          console.warn('Could not get scene from Graph');
+          return;
+        }
+        
+        const axisLength = 200;
+        
+        // Reuse material from existing scene object to avoid THREE constructor issues
+        let reuseMaterial = null;
+        if (scene.children && scene.children.length > 0) {
+          const existingMesh = scene.children.find(child => child.material);
+          if (existingMesh) {
+            reuseMaterial = existingMesh.material;
+          }
+        }
+        
+        // Create axis lines/cylinders with low opacity
+        const createAxisLine = (axis, color) => {
+          try {
+            const geometry = new THREE.CylinderGeometry(0.5, 0.5, axisLength * 2, 8);
+            const material = reuseMaterial ? reuseMaterial.clone() : new THREE.MeshBasicMaterial({ color: color });
+            if (material.color) material.color.setHex(color);
+            material.transparent = true;
+            material.opacity = 0.3;
+            const cylinder = new THREE.Mesh(geometry, material);
+            
+            // Rotate based on axis
+            if (axis === 'x') cylinder.rotation.z = Math.PI / 2;
+            else if (axis === 'y') cylinder.rotation.z = 0;
+            else if (axis === 'z') cylinder.rotation.x = Math.PI / 2;
+            
+            scene.add(cylinder);
+          } catch (e) {
+            console.debug('Line creation attempt:', e.message);
+          }
+        };
+        
+        createAxisLine('x', 0xff3333);  // Red
+        createAxisLine('y', 0x33ff33);  // Green
+        createAxisLine('z', 0x3333ff);  // Blue
+        
+        // Add semi-transparent dotted markers along each axis for reference
+        const createAxisSpheres = (axis, axisName, color, count = 11) => {
+          for (let i = 0; i < count; i++) {
+            try {
+              const pos = (i / (count - 1)) * 2 - 1; // -1 to 1
+              const geometry = new THREE.SphereGeometry(1.5, 6, 6);
+              const material = reuseMaterial ? reuseMaterial.clone() : new THREE.MeshBasicMaterial({ color: color });
+              if (material.color) material.color.setHex(color);
+              material.transparent = true;
+              material.opacity = 0.4;
+              const sphere = new THREE.Mesh(geometry, material);
+              
+              if (axis === 'x') sphere.position.set(pos * axisLength, 0, 0);
+              else if (axis === 'y') sphere.position.set(0, pos * axisLength, 0);
+              else if (axis === 'z') sphere.position.set(0, 0, pos * axisLength);
+              
+              scene.add(sphere);
+            } catch (e) {
+              console.debug('Sphere creation attempt:', e.message);
+            }
+          }
+        };
+        
+        createAxisSpheres('x', 'X', 0xff3333);  // Red
+        createAxisSpheres('y', 'Y', 0x33ff33);  // Green
+        createAxisSpheres('z', 'Z', 0x3333ff);  // Blue
+        
+        // Add larger end markers with transparency
+        const createEndMarker = (position, color) => {
+          try {
+            const geometry = new THREE.SphereGeometry(3, 8, 8);
+            const material = reuseMaterial ? reuseMaterial.clone() : new THREE.MeshBasicMaterial({ color: color });
+            if (material.color) material.color.setHex(color);
+            material.transparent = true;
+            material.opacity = 0.5;
+            const sphere = new THREE.Mesh(geometry, material);
+            sphere.position.copy(position);
+            scene.add(sphere);
+          } catch (e) {
+            console.debug('End marker creation attempt:', e.message);
+          }
+        };
+        
+        createEndMarker(new THREE.Vector3(axisLength, 0, 0), 0xff3333);
+        createEndMarker(new THREE.Vector3(-axisLength, 0, 0), 0xff3333);
+        createEndMarker(new THREE.Vector3(0, axisLength, 0), 0x33ff33);
+        createEndMarker(new THREE.Vector3(0, -axisLength, 0), 0x33ff33);
+        createEndMarker(new THREE.Vector3(0, 0, axisLength), 0x3333ff);
+        createEndMarker(new THREE.Vector3(0, 0, -axisLength), 0x3333ff);
+        
+        console.log('✅ Axes rendered with cylinders and spheres');
+      } catch (err) {
+        console.error('❌ Error rendering axes:', err.message);
+      }
+    }
+    
+    function evalFormula(formulaStr, context) {
+      try {
+        const R = context.R || 0;
+        const D = context.D || 0;
+        const fam = context.fam || 0;
+        const req_score = context.req_score || 0;
+        const master_score = context.master_score || 0;
+        const interest = context.interest || 0;
+        const market = context.market || 0;
+        
+        return Function('R', 'D', 'fam', 'req_score', 'master_score', 'interest', 'market', 
+          `"use strict"; return (${formulaStr});`
+        )(R, D, fam, req_score, master_score, interest, market);
+      } catch (e) {
+        console.error('Formula error:', e, 'Formula:', formulaStr);
+        return 1;
+      }
+    }
+    
+    function getSpringForce(node) {
+      const mode = document.getElementById('springFormulaMode').value;
+      const base = parseFloat(document.getElementById('springStrengthBase').value);
+      
+      const context = {
+        R: node.req_direct,
+        D: node.dep_direct,
+        fam: node.familiarity_num,
+        req_score: node.req_score || 0,
+        master_score: node.master_score || 0,
+        interest: node.interest_num || 0,
+        market: node.market_num || 0
+      };
+      
+      let multiplier = 1;
+      switch(mode) {
+        case 'const': multiplier = 1; break;
+        case 'R*D': multiplier = node.req_direct * node.dep_direct; break;
+        case 'R/(1+D)': multiplier = node.req_direct / (1 + node.dep_direct); break;
+        case 'avg_score': multiplier = ((node.req_score || 0) + (node.master_score || 0)) / 2; break;
+        case 'interest': multiplier = node.interest_num || 0; break;
+        case 'market': multiplier = node.market_num || 0; break;
+        case 'familiarity': multiplier = node.familiarity_num || 0; break;
+        case 'req_indirect': multiplier = node.req_indirect || 0; break;
+        case 'dep_indirect': multiplier = node.dep_indirect || 0; break;
+        case 'custom':
+          const custom = document.getElementById('springFormulaCustom').value.trim();
+          if (custom) multiplier = evalFormula(custom, context);
+          break;
+      }
+      
+      return Math.max(base * multiplier * 0.1, 0.01) * (document.getElementById('springReverse').checked ? -1 : 1);
+    }
+    
+    function getRepulsionForce(node) {
+      const mode = document.getElementById('repulsionFormulaMode').value;
+      const strength = parseFloat(document.getElementById('repulsionBase').value);
+      
+      if (strength === 0) return 0;
+      
+      const context = {
+        R: node.req_direct,
+        D: node.dep_direct,
+        fam: node.familiarity_num,
+        req_score: node.req_score || 0,
+        master_score: node.master_score || 0
+      };
+      
+      let multiplier = 1;
+      switch(mode) {
+        case 'const': multiplier = 1; break;
+        case 'R*D': multiplier = node.req_direct * node.dep_direct; break;
+        case 'req_direct': multiplier = node.req_direct; break;
+        case 'dep_direct': multiplier = node.dep_direct; break;
+        case 'req_indirect': multiplier = node.req_indirect || 0; break;
+        case 'dep_indirect': multiplier = node.dep_indirect || 0; break;
+        case 'centrality_sqrt': multiplier = Math.sqrt(node.req_direct * node.dep_direct); break;
+        case 'familiarity': multiplier = node.familiarity_num || 0; break;
+        case 'interest': multiplier = node.interest_num || 0; break;
+        case 'custom':
+          const custom = document.getElementById('repulsionFormulaCustom').value.trim();
+          if (custom) multiplier = evalFormula(custom, context);
+          break;
+      }
+      
+      // Return as positive value for strength (d3-force will use -strength internally)
+      const reversed = document.getElementById('repulsionReverse').checked ? 1 : -1;
+      return reversed * strength * Math.max(multiplier * 0.5, 0.1);
+    }
+    
+    function getAttractionForce(node) {
+      const mode = document.getElementById('attractionFormulaMode').value;
+      const strength = parseFloat(document.getElementById('attractionBase').value);
+      
+      if (strength === 0) return 0;
+      
+      const context = {
+        R: node.req_direct,
+        D: node.dep_direct,
+        fam: node.familiarity_num,
+        req_score: node.req_score || 0,
+        master_score: node.master_score || 0,
+        interest: node.interest_num || 0,
+        market: node.market_num || 0
+      };
+      
+      let multiplier = 1;
+      switch(mode) {
+        case 'const': multiplier = 1; break;
+        case 'R*D': multiplier = node.req_direct * node.dep_direct; break;
+        case 'req_direct': multiplier = node.req_direct; break;
+        case 'dep_direct': multiplier = node.dep_direct; break;
+        case 'req_indirect': multiplier = node.req_indirect || 0; break;
+        case 'dep_indirect': multiplier = node.dep_indirect || 0; break;
+        case 'centrality_sqrt': multiplier = Math.sqrt(node.req_direct * node.dep_direct); break;
+        case 'familiarity': multiplier = node.familiarity_num || 0; break;
+        case 'interest': multiplier = node.interest_num || 0; break;
+        case 'market': multiplier = node.market_num || 0; break;
+        case 'custom':
+          const custom = document.getElementById('attractionFormulaCustom').value.trim();
+          if (custom) multiplier = evalFormula(custom, context);
+          break;
+      }
+      
+      const reversed = document.getElementById('attractionReverse').checked ? -1 : 1;
+      return reversed * strength * Math.max(multiplier * 0.5, 0.1);
+    }
+    
+    function getLinkDistance(link) {
+      const mode = document.getElementById('linkDistFormulaMode').value;
+      const base = parseFloat(document.getElementById('linkDistBase').value);
+      
+      if (mode === 'const') return base;
+      
+      const source = link.source.id ? link.source : graphData.nodes.find(n => n.id === link.source);
+      const target = link.target.id ? link.target : graphData.nodes.find(n => n.id === link.target);
+      if (!source || !target) return base;
+      
+      const avgR = (source.req_direct + target.req_direct) / 2;
+      const avgD = (source.dep_direct + target.dep_direct) / 2;
+      const context = { R: avgR, D: avgD };
+      
+      let multiplier = 1;
+      switch(mode) {
+        case 'R+D': multiplier = avgR + avgD; break;
+        case 'req_direct': multiplier = avgR; break;
+        case 'dep_direct': multiplier = avgD; break;
+        case 'req_indirect': multiplier = ((source.req_indirect || 0) + (target.req_indirect || 0)) / 2; break;
+        case 'dep_indirect': multiplier = ((source.dep_indirect || 0) + (target.dep_indirect || 0)) / 2; break;
+        case 'efficiency': multiplier = avgR / (1 + avgD); break;
+        case 'familiarity': multiplier = (source.familiarity_num + target.familiarity_num) / 2; break;
+        case 'fam_inverse': multiplier = 1 / Math.max((source.familiarity_num + target.familiarity_num) / 2, 1); break;
+        case 'custom':
+          const custom = document.getElementById('linkDistFormulaCustom').value.trim();
+          if (custom) multiplier = evalFormula(custom, context);
+          break;
+      }
+      
+      return Math.max(base * multiplier * 0.5, 5);
+    }
+    
+    function updateForces() {
+      if (!Graph || !graphData) return;
+      
+      console.log('🔄 updateForces() starting...');
+      const sizeMetric = document.getElementById('sizeMetric').value;
+      const nodeBaseSize = parseFloat(document.getElementById('nodeBaseSize').value);
+      
+      // Update node sizes
+      Graph.nodeVal(node => {
+        let size = 1;
+        switch(sizeMetric) {
+          case 'const': size = 1; break;
+          case 'R*D': size = Math.max(node.req_direct * node.dep_direct, 1); break;
+          case 'req_direct': size = Math.max(node.req_direct, 1); break;
+          case 'req_score': size = Math.max((node.req_score || 0) / 2, 1); break;
+        }
+        return size * nodeBaseSize + 2;
+      });
+      
+      const simulation = Graph.d3Force('_simulation');
+      
+      // Repulsion Force
+      if (document.getElementById('repulsionEnabled').checked) {
+        const repulsionMode = document.getElementById('repulsionMode').value;
+        const repulsionStrength = parseFloat(document.getElementById('repulsionBase').value);
+        
+        if (repulsionMode === 'pairwise') {
+          // Pairwise: standard charge force
+          const chargeForce = Graph.d3Force('charge');
+          if (chargeForce) {
+            chargeForce.strength(node => getRepulsionForce(node));
+          }
+        } else {
+          // Global: push nodes away from center
+          const globalRepulsion = () => {
+            graphData.nodes.forEach(node => {
+              if (!node.vx) node.vx = 0;
+              if (!node.vy) node.vy = 0;
+              if (!node.vz) node.vz = 0;
+              
+              const repulsion = getRepulsionForce(node);
+              const distance = Math.sqrt(node.x * node.x + node.y * node.y + node.z * node.z);
+              
+              if (distance > 0.1) {
+                const strength = repulsion * 0.01;
+                node.vx += (node.x / distance) * strength;
+                node.vy += (node.y / distance) * strength;
+                node.vz += (node.z / distance) * strength;
+              }
+            });
+          };
+          if (simulation) simulation.force('globalRepulsion', globalRepulsion);
+        }
+      } else {
+        // Disable repulsion
+        const chargeForce = Graph.d3Force('charge');
+        if (chargeForce) chargeForce.strength(0);
+        if (simulation) simulation.force('globalRepulsion', null);
+      }
+      
+      // Spring/Link Forces
+      if (document.getElementById('springEnabled').checked && document.getElementById('linkEnabled').checked) {
+        const linkForce = Graph.d3Force('link');
+        if (linkForce) {
+          linkForce.distance(link => getLinkDistance(link));
+          linkForce.strength(link => getSpringForce(link.source));
+        }
+      } else {
+        const linkForce = Graph.d3Force('link');
+        if (linkForce) linkForce.strength(0);
+      }
+      
+      // Attraction Force
+      if (document.getElementById('attractionEnabled').checked) {
+        const attractionMode = document.getElementById('attractionMode').value;
+        const attractionStrength = parseFloat(document.getElementById('attractionBase').value);
+        
+        if (attractionStrength > 0) {
+          if (attractionMode === 'pairwise') {
+            // Pairwise: use charge force with positive values to attract
+            const chargeForce = Graph.d3Force('charge');
+            if (chargeForce) {
+              // Store original strength function and combine with attraction
+              const origStrengthFn = chargeForce.strength();
+              chargeForce.strength(node => {
+                const repulsion = document.getElementById('repulsionEnabled').checked ? getRepulsionForce(node) : 0;
+                const attraction = getAttractionForce(node);
+                return repulsion + attraction;  // attraction is already negative when reversed
+              });
+            }
+          } else {
+            // Global: pull toward center
+            const globalAttraction = () => {
+              graphData.nodes.forEach(node => {
+                if (!node.vx) node.vx = 0;
+                if (!node.vy) node.vy = 0;
+                if (!node.vz) node.vz = 0;
+                
+                const attraction = getAttractionForce(node);
+                const distance = Math.sqrt(node.x * node.x + node.y * node.y + node.z * node.z);
+                
+                if (distance > 0) {
+                  const strength = Math.abs(attraction) * 0.01;
+                  // Attraction pulls toward center (negative direction from position)
+                  node.vx -= (node.x / distance) * strength;
+                  node.vy -= (node.y / distance) * strength;
+                  node.vz -= (node.z / distance) * strength;
+                }
+              });
+            };
+            if (simulation) simulation.force('globalAttraction', globalAttraction);
+          }
+        } else {
+          if (simulation) {
+            simulation.force('globalAttraction', null);
+          }
+        }
+      } else {
+        if (simulation) {
+          simulation.force('globalAttraction', null);
+        }
+      }
+      
+      // Apply axis alignment forces
+      applyAxisAlignmentForces();
+      
+      // Reinitialize graph to start fresh animation
+      console.log('🎬 Updating forces and starting animation...');
+      Graph.graphData(graphData);
+      
+      // Re-add axes after graph update (they get cleared when graphData is set)
+      setTimeout(() => {
+        addAxes();
+      }, 50);
+      
+      // If autoRestart is checked, reheat the animation
+      if (document.getElementById('autoRestart').checked) {
+        const sim = Graph.d3Force('_simulation');
+        const heatLevel = parseFloat(document.getElementById('simulationHeat').value);
+        if (sim && sim.alpha() < heatLevel) {
+          sim.alpha(heatLevel).restart();
+        }
+      }
+      
+      // Start continuous animation loop if not already running
+      if (!continuousAnimationInterval) {
+        startContinuousAnimation();
+      }
+    }
+    
+    function startContinuousAnimation() {
+      if (continuousAnimationInterval) return;
+      
+      console.log('▶️ Starting continuous animation loop...');
+      let reheatedCount = 0;
+      
+      continuousAnimationInterval = setInterval(() => {
+        if (!Graph || !graphData || !isSimulationPlaying) return;
+        
+        const simulation = Graph.d3Force('_simulation');
+        if (simulation) {
+          const currentAlpha = simulation.alpha();
+          const heatLevel = parseFloat(document.getElementById('simulationHeat').value);
+          
+          // Keep the simulation alive by reheating it with the heat slider value
+          if (currentAlpha < heatLevel) {
+            simulation.alpha(heatLevel).restart();
+            reheatedCount++;
+            if (reheatedCount % 10 === 0) {
+              console.log('🔥 Reheating to ' + heatLevel.toFixed(2));
+            }
+          }
+          
+          // Apply axis alignment forces continuously
+          applyAxisAlignmentForces();
+        }
+      }, 30);  // 30ms = ~33fps
+    }
+    
+    function updateWarmupCooldown() {
+      const warmup = parseInt(document.getElementById('warmupTicks').value);
+      const cooldown = parseInt(document.getElementById('cooldownTicks').value);
+      document.getElementById('warmupValue').textContent = warmup;
+      document.getElementById('cooldownValue').textContent = cooldown;
+      
+      if (!Graph || !graphData) return;
+      
+      console.log('⚙️ Updating warmup/cooldown to:', warmup, cooldown);
+      // Reinitialize graph with new settings
+      Graph.warmupTicks(warmup).cooldownTicks(cooldown);
+      updateForces();
+    }
+    
+    function updateEdges() {
+      if (!Graph) return;
+      
+      const edgeColorMode = document.getElementById('edgeColorMode').value;
+      const edgeThickness = parseFloat(document.getElementById('edgeBaseThickness').value);
+      
+      Graph.linkWidth(edgeThickness);
+      // Scale arrow length proportionally with edge thickness (base scale: 0.3 at 1.5 thickness)
+      Graph.linkDirectionalArrowLength((edgeThickness * 3));
+      
+      Graph.linkColor(link => {
+        if (edgeColorMode === 'type') {
+          // Color by relationship type
+          return 'rgba(100, 150, 255, 0.5)';  // Blue for all (could differentiate further)
+        } else if (edgeColorMode === 'strength') {
+          // Color by how many dependencies/requirements
+          const source = link.source.id ? link.source : graphData.nodes.find(n => n.id === link.source);
+          const strength = (source?.req_direct || 0) + (source?.dep_direct || 0);
+          const hue = 160 + (strength) * 25;
+          return `hsl(${hue}, 70%, 20%)`;
+        } else {
+          return 'rgba(100, 150, 255, 0.4)'; 
+        }
+      });
+    }
+    
+    function resetSimulation() {
+      if (!Graph || !graphData) return;
+      
+      console.log('🔄 Reset and Play (15 seconds)');
+      
+      // Reinitialize graph to reset positions
+      Graph.graphData(graphData);
+      
+      // Animate for 15 seconds (450 frames at 33fps = ~15 seconds)
+      const heatLevel = parseFloat(document.getElementById('simulationHeat').value);
+      let frameCount = 0;
+      const animationInterval = setInterval(() => {
+        if (frameCount++ < 4500) {
+          // Reheat at every step like updateForces does
+          const sim = Graph.d3Force('_simulation');
+          if (sim && sim.alpha() < heatLevel) {
+            sim.alpha(heatLevel).restart();
+          }
+          Graph.graphData(graphData);
+        } else {
+          clearInterval(animationInterval);
+          console.log('✓ Animation finished (15 seconds)');
+        }
+      }, 30);  // 30ms = ~33fps
+    }
+    
+    let storedCooldownTicks = 1000;
+    
+    function togglePlayPause() {
+      console.log('togglePlayPause called');
+      if (!Graph) {
+        console.warn('Graph not initialized');
+        return;
+      }
+      
+      isSimulationPlaying = !isSimulationPlaying;
+      console.log('isSimulationPlaying toggled to:', isSimulationPlaying);
+      
+      if (isSimulationPlaying) {
+        console.log('▶️ Resuming simulation');
+        // Restore cooldown ticks to resume animation
+        Graph.cooldownTicks(storedCooldownTicks);
+      } else {
+        console.log('⏸️ Pausing simulation');
+        // Store current cooldown and set to 0 to stop
+        storedCooldownTicks = 1000; // Default value
+        Graph.cooldownTicks(0);
+        
+        // After 1 second, restore ticks if still paused
+        setTimeout(() => {
+          if (!isSimulationPlaying) {
+            Graph.cooldownTicks(storedCooldownTicks);
+            console.log('✓ Pause cooldown reset');
+          }
+        }, 1000);
+      }
+    }
+    
+    function updateColors() {
+      if (!Graph) return;
+      const colorMetric = document.getElementById('colorMetric').value;
+      
+      Graph.nodeColor(d => {
+        if (colorMetric === 'familiarity') {
+          const colorMap = {
+            5: '#2ecc71', 4: '#3498db', 3: '#f39c12',
+            2: '#e74c3c', 1: '#95a5a6', 0: '#95a5a6'
+          };
+          return colorMap[d.familiarity_num] || '#95a5a6';
+        } 
+        if (colorMetric === 'interest') {
+          const colorMap = {
+            5: '#23fce7', 4: '#49b2eb', 3: '#3b49a1', // how do I create a color selection box here in the code to see the colors?
+            2: '#45304f', 1: '#290014', 0: '#999999'
+          };
+          return colorMap[d.interest_num] || '#999999';
+        }
+        if (colorMetric === 'market') {
+          const colorMap = {
+            5: '#ff00ff', 4: '#7700ff', 3: '#0000ff',
+            2: '#00ccff', 1: '#999999', 0: '#999999'
+          };
+          return colorMap[d.market_num] || '#999999';
+        }
+        if (colorMetric === 'req_direct') {
+          const val = Math.min(d.req_direct / 5, 1);
+          return `hsl(200, 70%, ${10 + val * 150}%)`;
+        }
+        if (colorMetric === 'dep_direct') {
+          const val = Math.min(d.dep_direct / 7, 1);
+          return `hsl(30, 100%, ${30 + val * 50}%)`;
+        }
+        if (colorMetric === 'centrality') {
+          const centrality = d.req_direct * d.dep_direct;
+          const val = Math.min(centrality / 20, 1);
+          return `hsl(120, 100%, ${20 + val * 60}%)`;
+        }
+        return '#888';
+      });
+      
+      // Update legend with color scale
+      const legend = document.getElementById('legend');
+      const maxReq = Math.max(...graphData.nodes.map(n => n.req_direct));
+      const maxDep = Math.max(...graphData.nodes.map(n => n.dep_direct));
+      const maxCent = Math.max(...graphData.nodes.map(n => n.req_direct * n.dep_direct));
+      
+      if (colorMetric === 'familiarity') {
+        const items = [
+          ['🏆 Profissional', '#2ecc71'],
+          ['💪 Confiante', '#3498db'],
+          ['📚 Familiar', '#f39c12'],
+          ['🌱 Iniciante', '#e74c3c'],
+          ['❓ Desconhecida', '#95a5a6']
+        ];
+        legend.innerHTML = '<h4>🎨 Familiarity</h4>' + items.map(([label, color]) => 
+          `<div class="legend-item"><div class="legend-color" style="background: ${color}"></div><div>${label}</div></div>`
+        ).join('');
+        legend.style.display = 'block';
+      } else if (colorMetric === 'interest') {
+        const items = [
+          ['5 - Very High', '#23fce7'],
+          ['4 - High', '#49b2eb'],
+          ['3 - Moderate', '#3b49a1'],
+          ['2 - Low', '#45304f'],
+          ['1 - Very Low', '#290014']
+        ];
+        legend.innerHTML = '<h4>🎨 Interest</h4>' + items.map(([label, color]) => 
+          `<div class="legend-item"><div class="legend-color" style="background: ${color}"></div><div>${label}</div></div>`
+        ).join('');
+        legend.style.display = 'block';
+      } else if (colorMetric === 'market') {
+        const items = [
+          ['5 - Very High', '#ff00ff'],
+          ['4 - High', '#7700ff'],
+          ['3 - Moderate', '#0000ff'],
+          ['2 - Low', '#00ccff'],
+          ['1 - Very Low', '#999999']
+        ];
+        legend.innerHTML = '<h4>🎨 Market Relevance</h4>' + items.map(([label, color]) => 
+          `<div class="legend-item"><div class="legend-color" style="background: ${color}"></div><div>${label}</div></div>`
+        ).join('');
+        legend.style.display = 'block';
+      } else if (colorMetric === 'req_direct') {
+        let html = '<h4>🎨 Requirements (R)</h4>';
+        html += '<div style="display: flex; gap: 3px; margin-bottom: 6px;">';
+        for (let i = 0; i < 5; i++) {
+          const hue = 200;
+          const light = 5 + (i/12) * 220;
+          html += `<div style="flex:1; height:20px; background:hsl(${hue}, 100%, ${light}%);"></div>`;
+        }
+        html += '</div><div style="display: flex; justify-content: space-between; font-size: 10px; color: #aaa;"><span>0</span><span>' + Math.round(maxReq) + '</span></div>';
+        legend.innerHTML = html;
+        legend.style.display = 'block';
+      } else if (colorMetric === 'dep_direct') {
+        let html = '<h4>🎨 Dependencies (D)</h4>';
+        html += '<div style="display: flex; gap: 3px; margin-bottom: 6px;">';
+        for (let i = 0; i < 5; i++) {
+          const hue = 30;
+          const light = 30 + (i/4) * 50;
+          html += `<div style="flex:1; height:20px; background:hsl(${hue}, 100%, ${light}%);"></div>`;
+        }
+        html += '</div><div style="display: flex; justify-content: space-between; font-size: 10px; color: #aaa;"><span>0</span><span>' + Math.round(maxDep) + '</span></div>';
+        legend.innerHTML = html;
+        legend.style.display = 'block';
+      } else if (colorMetric === 'centrality') {
+        let html = '<h4>🎨 Centrality (R×D)</h4>';
+        html += '<div style="display: flex; gap: 3px; margin-bottom: 6px;">';
+        for (let i = 0; i < 5; i++) {
+          const hue = 120;
+          const light = 20 + (i/4) * 60;
+          html += `<div style="flex:1; height:20px; background:hsl(${hue}, 100%, ${light}%);"></div>`;
+        }
+        html += '</div><div style="display: flex; justify-content: space-between; font-size: 10px; color: #aaa;"><span>0</span><span>' + Math.round(maxCent) + '</span></div>';
+        legend.innerHTML = html;
+        legend.style.display = 'block';
+      } else {
+        legend.style.display = 'none';
+      }
+    }
+    
+    function resetView() {
+      if (!Graph) return;
+      Graph.cameraPosition({ x: 0, y: 0, z: 250 }, { x: 0, y: 0, z: 0 }, 1000);
+    }
+  </script>
+  
+  <script>
+    // Try to expose THREE.js after 3d-force-graph loads
+    // The bundle includes Three.js but doesn't export it globally
+    setTimeout(() => {
+      if (!window.THREE && typeof ForceGraph3D !== 'undefined') {
+        try {
+          console.log('Attempting to expose THREE from graph scene...');
+          // Just try to access Three via the graph's internal structure
+          if (Graph && Graph.scene) {
+            const scene = Graph.scene();
+            if (scene) {
+              // Check if there are objects in the scene we can extract from
+              for (let child of scene.children) {
+                if (child.position && child.position.constructor) {
+                  window.THREE = {
+                    Vector3: child.position.constructor,
+                    Mesh: child.constructor,
+                    MeshBasicMaterial: child.material ? child.material.constructor : null,
+                    SphereGeometry: child.geometry ? child.geometry.constructor : null
+                  };
+                  console.log('✅ THREE.js constructors exposed to window');
+                  break;
+                }
+              }
+            }
+          }
+        } catch (e) {
+          console.warn('⚠️ Could not expose THREE.js:', e.message);
+        }
+      }
+    }, 500);
+  </script>
+</body>
+</html>
