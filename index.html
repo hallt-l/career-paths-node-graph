@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>3D Career Skills Network - v5 (Axes)</title>
+  <title>3D Career Skills Network - v6 (config save slots and QoL tweaks)</title>
   <style>
     body { margin: 0; font-family: sans-serif; background: #000; overflow: hidden; }
     #graph { width: 100vw; height: 100vh; }
@@ -25,23 +25,60 @@
     #controls h3 { margin: 8px 0; font-size: 14px; }
     #controls h4 { margin: 10px 0 5px; font-size: 11px; color: #aaa; border-bottom: 1px solid #333; padding-bottom: 3px; }
     select, input[type="range"], input[type="text"], input[type="number"] { margin: 3px 0; width: 100%; font-size: 11px; }
-    button { width: 100%; padding: 6px; margin-top: 5px; background: #333; color: white; border: 1px solid #555; border-radius: 4px; cursor: pointer; font-size: 11px; }
-    button:hover { background: #444; }
+    button { width: 100%; padding: 6px; margin-top: 5px; background: rgb(32, 32, 32); color: rgb(234, 234, 234); border: 1px solid #555; border-radius: 4px; cursor: pointer; font-size: 11px; }
+    button:hover { background: #614c40; border-color: cyan;}
     label { display: block; margin-top: 8px; font-weight: bold; font-size: 10px; }
-    .value-display { min-width: 30px; text-align: right; color: #4a9eff; float: right; }
+    .value-display { min-width: 30px; text-align: right; color: aqua; float: right; }
     .formula-slot { background: rgba(255,255,255,0.05); padding: 8px; border-radius: 4px; margin: 8px 0; }
     .formula-slot label { margin-top: 4px; }
-    
     .force-section { background: rgba(255,255,255,0.02); border: 1px solid #333; border-radius: 4px; margin: 8px 0; overflow: hidden; }
-    .force-header { display: flex; align-items: center; gap: 8px; padding: 8px; background: rgba(255,255,255,0.05); cursor: pointer; user-select: none; }
+    .force-header { display: flex; align-items: center; gap: 8px; padding: 8px; background: rgb(25, 25, 25); cursor: pointer; user-select: none; }
     .force-header input[type="checkbox"] { flex-shrink: 0; }
     .force-header-title { flex: 1; font-weight: bold; font-size: 11px; }
-    .force-header.enabled .force-header-title { color: #2ecc71; }
-    .force-header.enabled input[type="checkbox"] { accent-color: #2ecc71; }
-    .force-content { display: none; padding: 8px; background: rgba(255,255,255,0.02); }
+    .force-header.enabled .force-header-title { color: aqua;  }
+    .force-header.enabled input[type="checkbox"] {  accent-color: aqua; }
+    .force-content { display: none; padding: 8px; background: rgb(32, 32, 32); }
     .force-content.show { display: block; }
     .force-header::after { content: '▼'; font-size: 9px; opacity: 0.5; transition: transform 0.2s; }
     .force-header.collapsed::after { transform: rotate(-90deg); }
+
+    /* Custom checkbox styling */
+    input[type="checkbox"] {
+      appearance: none;
+      -webkit-appearance: none;
+      width: 16px;
+      height: 16px;
+      background: #2a2a2a;  /* ← Unchecked background color */
+      border: 2px solid #555;
+      border-radius: 3px;
+      cursor: pointer;
+      position: relative;
+      flex-shrink: 0;
+    }
+
+    input[type="checkbox"]:checked {
+      background: #614c40;  /* ← Checked background color */
+      border-color: aqua;
+    }
+    
+    input[type="checkbox"]:hover {
+      box-shadow: 0px 0px 4px rgb(0, 255, 255);
+      border-color: cyan;
+      background-color: #614c40;
+      color:#000;
+    }
+
+    /* Checkmark */
+    input[type="checkbox"]:checked::after {
+      content: '◈';
+      position: absolute;
+      top: -1px;
+      left: 1px;
+      color: cyan;  /* Checkmark color */
+      font-size: 14px;
+      font-weight: normal;
+    }
+
   </style>
   <script src="https://unpkg.com/3d-force-graph@1.73.3/dist/3d-force-graph.min.js"></script>
 </head>
@@ -49,8 +86,8 @@
   <div id="graph"></div>
   <div id="legend" style="display: none;"><h4>🎨 Legend</h4></div>
   <div id="controls" style="display: none;">
-    <h3>🎛️ Network Viz v5 (Axes + Properties)</h3>
-    
+    <h3>🎛️ Network Viz v6 (Axes + Properties)</h3>
+
     <h4>⚡ Attribute-Driven Forces</h4>
     
     <!-- Spring Force -->
@@ -281,6 +318,20 @@
         <input type="range" id="cooldownTicks" min="0" max="10000" step="10" value="1000" onchange="updateWarmupCooldown()">
       </div>
     </div>
+
+    <h3>💾 Save Slots</h3>
+    <input type="text" id="slotName" placeholder="Config name..." style="margin-bottom: 5px;">
+    <div style="display: flex; gap: 5px; margin-bottom: 8px;">
+      <button onclick="saveConfig()" style="flex: 1;">Save</button>
+      <button onclick="loadConfig()" style="flex: 1;">Load</button>
+      <button onclick="deleteConfig()" style="flex: 1;">Delete</button>
+    </div>
+    <h4>Saved Configs:</h4>
+    <select id="slotsList" size="4" style="height: 80px; margin-bottom: 5px; color:white"></select>
+    <!-- NEW: Import/Export buttons -->
+    <button onclick="exportConfigs()">📤 Export All to File</button>
+    <button onclick="importConfigs()">📥 Import from File</button>
+    <input type="file" id="importFile" accept=".json" style="display:none;">
     
     <div style="margin-top: 12px; padding-top: 8px; border-top: 1px solid #333; font-size: 9px; color: #666;">
       <div id="nodeCount"></div>
@@ -377,6 +428,8 @@
             if (document.getElementById('autoRestart').checked) updateForces();
           });
         });
+
+        
         
         // Mode selectors for repulsion and attraction
         ['repulsionMode', 'attractionMode'].forEach(id => {
@@ -791,6 +844,206 @@
       return Math.max(base * multiplier * 0.5, 5);
     }
     
+    let savedConfigs = {};
+
+    // Load saved configs from localStorage on page load
+    function initSaveSlots() {
+      const stored = localStorage.getItem('skillsGraphViz_SaveSlots');  // Remove .json
+      if (stored) {
+        savedConfigs = JSON.parse(stored);
+        refreshSlotsList();
+      }
+    }
+
+
+    function getCurrentConfig() {
+      return {
+        // Formulas
+        springFormulaMode: document.getElementById('springFormulaMode').value,
+        springFormulaCustom: document.getElementById('springFormulaCustom').value,
+        springStrengthBase: document.getElementById('springStrengthBase').value,
+        
+        repulsionFormulaMode: document.getElementById('repulsionFormulaMode').value,
+        repulsionFormulaCustom: document.getElementById('repulsionFormulaCustom').value,
+        repulsionBase: document.getElementById('repulsionBase').value,
+        
+        linkDistFormulaMode: document.getElementById('linkDistFormulaMode').value,
+        linkDistFormulaCustom: document.getElementById('linkDistFormulaCustom').value,
+        linkDistBase: document.getElementById('linkDistBase').value,
+        
+        // Visualization
+        nodeBaseSize: document.getElementById('nodeBaseSize').value,
+        edgeBaseThickness: document.getElementById('edgeBaseThickness').value,
+        colorMetric: document.getElementById('colorMetric').value,
+        sizeMetric: document.getElementById('sizeMetric').value,
+        edgeColorMode: document.getElementById('edgeColorMode').value,
+        
+        // Simulation
+        autoRestart: document.getElementById('autoRestart').checked,
+        simulationHeat: document.getElementById('simulationHeat').value,
+        warmupTicks: document.getElementById('warmupTicks').value,
+        cooldownTicks: document.getElementById('cooldownTicks').value
+      };
+    }
+
+    function applyConfig(config) {
+      // Apply all values
+      Object.keys(config).forEach(key => {
+        const el = document.getElementById(key);
+        if (!el) return;
+        
+        if (el.type === 'checkbox') {
+          el.checked = config[key];
+        } else if (el.type === 'range') {
+          el.value = config[key];
+          // Update display value
+          const display = document.getElementById(key.replace(/Base$/, 'Value'));
+          if (display) display.textContent = config[key];
+        } else {
+          el.value = config[key];
+        }
+        
+        // Show/hide custom formula inputs
+        if (key.endsWith('FormulaMode')) {
+          const customId = key.replace('Mode', 'Custom');
+          const custom = document.getElementById(customId);
+          if (custom) {
+            custom.style.display = config[key] === 'custom' ? 'block' : 'none';
+          }
+        }
+      });
+      
+      // Trigger update
+      if (document.getElementById('autoRestart').checked) {
+        updateForces();
+      }
+
+      // ✨ NEW: Explicitly trigger all update functions to apply the loaded settings
+      updateColors();      // Apply node color changes
+      updateEdges();       // Apply edge color/thickness changes
+      updateForces();      // Apply force/size/axis changes
+      
+      console.log('✓ Loaded config and applied all updates');
+    }
+
+    function saveConfig() {
+      const name = document.getElementById('slotName').value.trim();
+      if (!name) {
+        alert('Please enter a name for this configuration');
+        return;
+      }
+      
+      
+      savedConfigs[name] = getCurrentConfig();
+      localStorage.setItem('skillsGraphViz_SaveSlots', JSON.stringify(savedConfigs));  // Changed key
+      
+      document.getElementById('slotName').value = '';
+      refreshSlotsList();
+      console.log('✓ Saved config:', name);
+    }
+
+    function loadConfig() {
+      const select = document.getElementById('slotsList');  // Changed from 'savedSlots'
+      const name = select.value;
+      if (!name || !savedConfigs[name]) {
+        alert('Please select a configuration to load');
+        return;
+      }
+      
+      applyConfig(savedConfigs[name]);
+      console.log('✓ Loaded config:', name);
+    }
+
+    function deleteConfig() {
+      const select = document.getElementById('slotsList');  // Changed from 'savedSlots'
+      const name = select.value;
+      if (!name || !savedConfigs[name]) {
+        alert('Please select a configuration to delete');
+        return;
+      }
+      
+      if (confirm(`Delete "${name}"?`)) {
+        delete savedConfigs[name];
+        localStorage.setItem('skillsGraphViz_SaveSlots', JSON.stringify(savedConfigs));  // Consistent key
+        refreshSlotsList();
+        console.log('✓ Deleted config:', name);
+      }
+    }
+
+    function refreshSlotsList() {
+      const select = document.getElementById('slotsList');
+      select.innerHTML = '';
+      
+      const names = Object.keys(savedConfigs).sort();
+      if (names.length === 0) {
+        select.innerHTML = '<option disabled>-- No saved configs --</option>';
+      } else {
+        names.forEach(name => {
+          const opt = document.createElement('option');
+          opt.value = name;
+          opt.textContent = name;
+          select.appendChild(opt);
+        });
+      }
+    }
+    
+    // Export all saved configurations to a downloadable JSON file
+    function exportConfigs() {
+      const slots = JSON.parse(localStorage.getItem('skillsGraphViz_SaveSlots') || '{}');
+      
+      if (Object.keys(slots).length === 0) {
+        alert('No saved configurations to export!');
+        return;
+      }
+      
+      // Create download
+      const dataStr = JSON.stringify(slots, null, 2);
+      const blob = new Blob([dataStr], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `graph-configs-${new Date().toISOString().slice(0,10)}.json`;
+      link.click();
+      URL.revokeObjectURL(url);
+      
+      alert(`Exported ${Object.keys(slots).length} configuration(s)!`);
+    }
+
+    // Import configurations from a JSON file
+    function importConfigs() {
+      document.getElementById('importFile').click();
+    }
+
+    // Handle file selection
+    document.getElementById('importFile').addEventListener('change', function(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      
+      const reader = new FileReader();
+      reader.onload = function(event) {
+        try {
+          const importedSlots = JSON.parse(event.target.result);
+          
+          // Merge with existing slots (or replace - your choice)
+          const existingSlots = JSON.parse(localStorage.getItem('skillsGraphViz_SaveSlots') || '{}');
+          const merged = { ...existingSlots, ...importedSlots };
+          
+          localStorage.setItem('skillsGraphViz_SaveSlots', JSON.stringify(merged));
+          refreshSlotsList();
+          
+          alert(`Imported ${Object.keys(importedSlots).length} configuration(s)!`);
+        } catch (err) {
+          alert('Error reading file: ' + err.message);
+        }
+      };
+      reader.readAsText(file);
+      
+      // Reset file input
+      e.target.value = '';
+    });
+
+    initSaveSlots();
+
     function updateForces() {
       if (!Graph || !graphData) return;
       
@@ -1003,7 +1256,7 @@
           const source = link.source.id ? link.source : graphData.nodes.find(n => n.id === link.source);
           const strength = (source?.req_direct || 0) + (source?.dep_direct || 0);
           const hue = 160 + (strength) * 25;
-          return `hsl(${hue}, 70%, 20%)`;
+          return `hsl(${hue}, 70%, 40%)`;
         } else {
           return 'rgba(100, 150, 255, 0.4)'; 
         }
@@ -1194,6 +1447,11 @@
       if (!Graph) return;
       Graph.cameraPosition({ x: 0, y: 0, z: 250 }, { x: 0, y: 0, z: 0 }, 1000);
     }
+
+    
+
+    
+
   </script>
   
   <script>
